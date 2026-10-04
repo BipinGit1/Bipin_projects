@@ -10,3 +10,15 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        value: webtechsolutionsz077@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_TO
+        value: webtechsolutionsz077@gmail.com

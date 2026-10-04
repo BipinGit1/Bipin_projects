@@ -79,7 +79,7 @@ document.querySelector('.contact-form')?.addEventListener('submit', async (event
       throw new Error(result.error || 'Your request could not be sent. Please try again.');
     }
 
-    status.textContent = 'Thanks! Your project request has been emailed successfully.';
+    status.textContent = result.message || 'Thanks! Your project request has been received.';
     form.reset();
   } catch (error) {
     status.textContent = error.message || 'Unable to send your request right now. Please try again later.';

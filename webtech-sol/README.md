@@ -17,11 +17,23 @@ The contact form sends validated project requests through Resend to `MAIL_TO`. K
 3. In the service's Environment settings, set `RESEND_API_KEY` and `MAIL_FROM`. `MAIL_FROM` must use a domain verified in your Resend account. Keep `MAIL_TO` as `webtechsolutionsz077@gmail.com`.
 4. Redeploy after saving environment settings. Test the live form and confirm the message arrives in your Gmail inbox.
 
-Render blocks outbound SMTP, so this project uses Resend's HTTPS API for production delivery. Without a verified sender domain and API key, the website can load but form submissions will report that email delivery is not configured.
+## Private business dashboard
+
+1. Create a free PostgreSQL project in Neon and copy its pooled connection string (with TLS enabled).
+2. In Render, add `DATABASE_URL`, `ADMIN_EMAIL=webtechsolutionsz077@gmail.com`, and a unique strong `ADMIN_PASSWORD` in the web service's Environment settings.
+3. Save changes and redeploy. The app creates its `website_leads` and `revenue_entries` tables at startup.
+4. Sign in at `https://webtech-sol.onrender.com/admin`. New website enquiries appear in the leads table; record payments manually to update the INR revenue totals and six-month chart.
+
+The admin session uses an HttpOnly, Secure, SameSite cookie and expires after eight hours. Login attempts are rate-limited. Keep the Neon connection string and dashboard password private; never commit them to GitHub or enter them into this chat.
+
+Render blocks outbound SMTP, so this project uses Resend's HTTPS API for production email notifications. Without the database connection, project requests cannot be stored. If the database is configured but Resend is not, requests are still saved in the dashboard and the visitor is told that the email notification is temporarily unavailable.
 
 ## Backend protections
 
 - Server-side field validation and body-size limit
 - Per-IP request throttling and a hidden honeypot field
 - Resend API key kept outside source control
+- HttpOnly, Secure, SameSite admin session cookie with server-side expiry
+- Same-origin checks for authenticated dashboard mutations
+- Parameterized PostgreSQL queries for revenue and lead updates
 - Generic delivery errors returned to the browser without exposing SMTP details

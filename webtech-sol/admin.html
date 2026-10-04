@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="Private WebTech Sol leads and revenue dashboard." />
+    <title>WebTech Sol Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/admin.css" />
+    <script src="/admin.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section id="login-panel" class="login-panel panel" hidden>
+        <a class="brand" href="/" aria-label="WebTech Sol home">
+          <span class="brand-mark">W</span>
+          <span>WebTech Sol</span>
+        </a>
+        <p class="eyebrow">Private workspace</p>
+        <h1>Welcome back.</h1>
+        <p class="muted">Sign in to review incoming project requests and recorded revenue.</p>
+        <form id="login-form">
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="username" required maxlength="254" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input name="password" type="password" autocomplete="current-password" required maxlength="256" />
+          </label>
+          <p id="login-message" class="message" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Sign in to dashboard</button>
+        </form>
+        <a class="back-link" href="/">← Back to website</a>
+      </section>
+
+      <section id="dashboard-panel" hidden>
+        <header class="topbar">
+          <a class="brand" href="/" aria-label="WebTech Sol home">
+            <span class="brand-mark">W</span>
+            <span>WebTech Sol <span class="brand-suffix">/ Dashboard</span></span>
+          </a>
+          <div class="account">
+            <span id="account-email"></span>
+            <button id="logout-button" class="button button-quiet" type="button">Sign out</button>
+          </div>
+        </header>
+
+        <div class="dashboard-content">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">Your business at a glance</p>
+              <h1>Dashboard</h1>
+              <p class="muted">Project enquiries and revenue you have recorded.</p>
+            </div>
+            <button id="refresh-button" class="button button-quiet" type="button">↻ Refresh</button>
+          </div>
+
+          <p id="dashboard-message" class="message" role="status" aria-live="polite"></p>
+
+          <section class="metrics" aria-label="Business overview">
+            <article class="metric-card">
+              <span class="metric-label">Total revenue</span>
+              <strong id="revenue-total">₹0.00</strong>
+              <span class="metric-note">All recorded payments</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Revenue this month</span>
+              <strong id="revenue-month">₹0.00</strong>
+              <span class="metric-note">Payments dated this month</span>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Project enquiries</span>
+              <strong id="lead-total">0</strong>
+              <span class="metric-note"><span id="lead-new">0</span> new enquiries</span>
+            </article>
+          </section>
+
+          <div class="content-grid">
+            <section class="panel chart-panel">
+              <div class="section-title">
+                <div>
+                  <p class="eyebrow">Last six months</p>
+                  <h2>Revenue trend</h2>
+                </div>
+                <span class="muted">INR</span>
+              </div>
+              <div id="revenue-chart" class="revenue-chart" aria-label="Revenue by month"></div>
+            </section>
+
+            <section class="panel entry-panel">
+              <p class="eyebrow">Keep your books current</p>
+              <h2>Record a payment</h2>
+              <form id="revenue-form">
+                <label>
+                  <span>Project or payment note</span>
+                  <input name="title" type="text" maxlength="120" placeholder="e.g. Business website deposit" required />
+                </label>
+                <label>
+                  <span>Amount (₹)</span>
+                  <input name="amount" type="number" min="0.01" max="100000000" step="0.01" placeholder="15000" required />
+                </label>
+                <label>
+                  <span>Payment date</span>
+                  <input name="paidAt" type="date" required />
+                </label>
+                <button class="button button-primary" type="submit">Save payment</button>
+              </form>
+            </section>
+          </div>
+
+          <section class="panel table-panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Website contact form</p>
+                <h2>Recent project enquiries</h2>
+              </div>
+              <span id="lead-count-label" class="muted">Latest 100</span>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Received</th>
+                    <th>Contact</th>
+                    <th>Project</th>
+                    <th>Budget</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="leads-body"></tbody>
+              </table>
+              <p id="leads-empty" class="empty-state" hidden>No project enquiries yet. They’ll appear here when visitors submit the contact form.</p>
+            </div>
+          </section>
+
+          <section class="panel table-panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Manual payment log</p>
+                <h2>Recent revenue entries</h2>
+              </div>
+              <span id="revenue-count-label" class="muted">Latest 100</span>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Paid</th>
+                    <th>Project or note</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="revenue-body"></tbody>
+              </table>
+              <p id="revenue-empty" class="empty-state" hidden>No payments recorded yet. Add your first payment above.</p>
+            </div>
+          </section>
+          <p class="footer-note">Revenue is entered manually and reflects only the payments you record here.</p>
+        </div>
+      </section>
+      <p id="loading-message" class="loading-message">Loading your private dashboard…</p>
+    </main>
+  </body>
+</html>
