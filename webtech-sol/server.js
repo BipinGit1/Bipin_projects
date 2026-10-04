@@ -697,6 +697,7 @@ function serveStatic(request, response, pathname) {
   response.writeHead(200, {
     'Content-Type': contentTypes[path.extname(filePath)],
     ...(pathname === '/admin' || pathname === '/admin/' || pathname === '/admin.html'
+      || pathname === '/admin.js' || pathname === '/admin.css'
       ? { 'Cache-Control': 'no-store' }
       : {}),
     'X-Content-Type-Options': 'nosniff',
