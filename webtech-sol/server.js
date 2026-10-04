@@ -268,6 +268,11 @@ async function handleAdminApi(request, response, pathname, database = pool) {
       if (!safeEqual(email, expectedEmail)) {
         return sendJson(response, 200, { message: 'If the address matches the dashboard account, a reset link will be emailed.' });
       }
+      if (!process.env.RESEND_API_KEY || !process.env.MAIL_FROM) {
+        return sendJson(response, 503, {
+          error: 'Password reset email is not set up yet. The site owner must add RESEND_API_KEY and MAIL_FROM in Render, using a sender address verified with Resend.'
+        });
+      }
 
       const token = randomBytes(32).toString('base64url');
       const tokenHash = createHash('sha256').update(token).digest('hex');
@@ -291,7 +296,9 @@ async function handleAdminApi(request, response, pathname, database = pool) {
           console.error('Password reset token cleanup failed:', cleanupError.message || cleanupError.name);
         }
         console.error('Password reset email could not be sent:', error.message || error.name);
-        return sendJson(response, 503, { error: 'The reset email could not be sent. Please try again later or contact the site administrator.' });
+        return sendJson(response, 503, {
+          error: 'The reset email could not be sent. The site owner should check the Resend API key, verified sender address, and Render logs.'
+        });
       }
     });
   }

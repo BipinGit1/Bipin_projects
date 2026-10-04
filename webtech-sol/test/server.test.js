@@ -102,6 +102,42 @@ test('requires reset passwords to contain 8 characters, uppercase, and lowercase
   assert.equal(isValidAdminPassword('Abc123'), false);
 });
 
+test('explains the missing email setup when a password reset is requested', async () => {
+  const originalEmail = process.env.ADMIN_EMAIL;
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFrom = process.env.MAIL_FROM;
+  process.env.ADMIN_EMAIL = 'webtechsolutionsz077@gmail.com';
+  delete process.env.RESEND_API_KEY;
+  delete process.env.MAIL_FROM;
+  const server = createServer({ database: { async query() { throw new Error('Database should not be queried.'); } } });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    const response = await fetch(`${baseUrl}/api/admin/forgot-password`, {
+      method: 'POST',
+      headers: {
+        Origin: baseUrl,
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': '198.51.100.21'
+      },
+      body: JSON.stringify({ email: process.env.ADMIN_EMAIL })
+    });
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error, /RESEND_API_KEY and MAIL_FROM/);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    if (originalEmail === undefined) delete process.env.ADMIN_EMAIL;
+    else process.env.ADMIN_EMAIL = originalEmail;
+    if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.MAIL_FROM;
+    else process.env.MAIL_FROM = originalFrom;
+  }
+});
+
 test('saves contact requests to the lead store when email notifications are unavailable', async () => {
   const originalApiKey = process.env.RESEND_API_KEY;
   const originalFrom = process.env.MAIL_FROM;
