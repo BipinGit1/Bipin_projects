@@ -95,6 +95,49 @@ test('validates positive INR revenue entries with real calendar dates', () => {
   assert.equal(isValidRevenueEntry({ title: 'Project payment', amount: '1250', paidAt: '2026-02-30' }), false);
 });
 
+test('saves contact requests to the lead store when email notifications are unavailable', async () => {
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFrom = process.env.MAIL_FROM;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.MAIL_FROM;
+  let storedValues;
+  const database = {
+    async query(sql, values) {
+      assert.match(sql, /INSERT INTO website_leads/);
+      storedValues = values;
+      return { rows: [], rowCount: 1 };
+    }
+  };
+  const server = createServer({ database });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/contact`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validSubmission)
+    });
+    assert.equal(response.status, 200);
+    assert.match((await response.json()).message, /saved/);
+    assert.deepEqual(storedValues, [
+      validSubmission.name,
+      validSubmission.email,
+      validSubmission.phone,
+      validSubmission.projectType,
+      validSubmission.budget,
+      validSubmission.message
+    ]);
+  } finally {
+    await new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.MAIL_FROM;
+    else process.env.MAIL_FROM = originalFrom;
+  }
+});
+
 test('protects dashboard APIs behind login and creates an HttpOnly session', async () => {
   const originalEmail = process.env.ADMIN_EMAIL;
   const originalPassword = process.env.ADMIN_PASSWORD;
