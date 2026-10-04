@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: webtech-sol
+    runtime: node
+    plan: free
+    rootDir: webtech-sol
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
