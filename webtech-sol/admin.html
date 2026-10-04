@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="description" content="Private WebTech Sol leads and revenue dashboard." />
+    <meta name="referrer" content="no-referrer" />
     <title>WebTech Sol Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,7 +38,49 @@
           <p id="login-message" class="message" role="status" aria-live="polite"></p>
           <button class="button button-primary" type="submit">Sign in to dashboard</button>
         </form>
+        <button id="forgot-password-button" class="text-button" type="button">Forgot password?</button>
         <a class="back-link" href="/">← Back to website</a>
+      </section>
+
+      <section id="forgot-panel" class="login-panel panel" hidden>
+        <a class="brand" href="/" aria-label="WebTech Sol home">
+          <span class="brand-mark">W</span>
+          <span>WebTech Sol</span>
+        </a>
+        <p class="eyebrow">Account recovery</p>
+        <h1>Reset your password.</h1>
+        <p class="muted">Enter your dashboard email and we’ll send a one-time reset link if it matches your account.</p>
+        <form id="forgot-form">
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="username" required maxlength="254" />
+          </label>
+          <p id="forgot-message" class="message" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Send reset link</button>
+        </form>
+        <button id="back-to-login-button" class="text-button" type="button">← Back to sign in</button>
+      </section>
+
+      <section id="reset-panel" class="login-panel panel" hidden>
+        <a class="brand" href="/" aria-label="WebTech Sol home">
+          <span class="brand-mark">W</span>
+          <span>WebTech Sol</span>
+        </a>
+        <p class="eyebrow">Account recovery</p>
+        <h1>Choose a new password.</h1>
+        <p class="muted">Use at least 16 characters. This reset link can only be used once and expires after 30 minutes.</p>
+        <form id="reset-form">
+          <label>
+            <span>New password</span>
+            <input name="newPassword" type="password" autocomplete="new-password" required minlength="16" maxlength="256" />
+          </label>
+          <label>
+            <span>Confirm new password</span>
+            <input name="confirmPassword" type="password" autocomplete="new-password" required minlength="16" maxlength="256" />
+          </label>
+          <p id="reset-message" class="message" role="status" aria-live="polite"></p>
+          <button class="button button-primary" type="submit">Change password</button>
+        </form>
       </section>
 
       <section id="dashboard-panel" hidden>

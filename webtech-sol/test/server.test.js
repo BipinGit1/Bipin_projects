@@ -147,6 +147,9 @@ test('protects dashboard APIs behind login and creates an HttpOnly session', asy
   const leads = [];
   const database = {
     async query(sql, values = []) {
+      if (sql.includes('SELECT password_hash, password_salt FROM admin_credentials')) {
+        return { rows: [], rowCount: 0 };
+      }
       if (sql.includes('INSERT INTO revenue_entries')) {
         const entry = { id: revenueEntries.length + 1, title: values[0], amount: values[1], paidAt: values[2] };
         revenueEntries.push(entry);
@@ -244,6 +247,120 @@ test('protects dashboard APIs behind login and creates an HttpOnly session', asy
     else process.env.ADMIN_EMAIL = originalEmail;
     if (originalPassword === undefined) delete process.env.ADMIN_PASSWORD;
     else process.env.ADMIN_PASSWORD = originalPassword;
+  }
+});
+
+test('emails a single-use password reset link and changes the dashboard password', async () => {
+  const originalEmail = process.env.ADMIN_EMAIL;
+  const originalPassword = process.env.ADMIN_PASSWORD;
+  const originalApiKey = process.env.RESEND_API_KEY;
+  const originalFrom = process.env.MAIL_FROM;
+  const originalBaseUrl = process.env.PUBLIC_BASE_URL;
+  const originalFetch = global.fetch;
+  process.env.ADMIN_EMAIL = 'webtechsolutionsz077@gmail.com';
+  process.env.ADMIN_PASSWORD = 'the-original-test-password';
+  process.env.RESEND_API_KEY = 'test-api-key';
+  process.env.MAIL_FROM = 'WebTech Sol <hello@example.com>';
+  const resetTokens = new Map();
+  let credential = null;
+  let resetUrl;
+  global.fetch = async (url, options) => {
+    if (url !== 'https://api.resend.com/emails') return originalFetch(url, options);
+    assert.equal(url, 'https://api.resend.com/emails');
+    assert.equal(options.headers.Authorization, 'Bearer test-api-key');
+    const email = JSON.parse(options.body);
+    assert.deepEqual(email.to, [process.env.ADMIN_EMAIL]);
+    resetUrl = email.text.match(/https?:\/\/\S+/)?.[0];
+    return { ok: true, status: 200 };
+  };
+  const database = {
+    async query(sql, values = []) {
+      if (sql.includes('DELETE FROM admin_password_resets WHERE email = $1 OR expires_at <= NOW()')) {
+        resetTokens.clear();
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('INSERT INTO admin_password_resets')) {
+        resetTokens.set(values[0], { email: values[1] });
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes('DELETE FROM admin_password_resets WHERE token_hash = $1')) {
+        resetTokens.delete(values[0]);
+        return { rows: [], rowCount: 1 };
+      }
+      if (sql.includes('WITH used_token AS')) {
+        const token = resetTokens.get(values[0]);
+        if (!token || token.email !== values[3]) return { rows: [], rowCount: 0 };
+        resetTokens.delete(values[0]);
+        credential = { password_hash: values[1], password_salt: values[2] };
+        return { rows: [{ id: 1 }], rowCount: 1 };
+      }
+      if (sql.includes('DELETE FROM admin_password_resets WHERE email = $1')) {
+        resetTokens.clear();
+        return { rows: [], rowCount: 0 };
+      }
+      if (sql.includes('SELECT password_hash, password_salt FROM admin_credentials')) {
+        return { rows: credential ? [credential] : [], rowCount: credential ? 1 : 0 };
+      }
+      throw new Error(`Unexpected test query: ${sql}`);
+    }
+  };
+  const server = createServer({ database });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+    process.env.PUBLIC_BASE_URL = baseUrl;
+    const requestReset = await fetch(`${baseUrl}/api/admin/forgot-password`, {
+      method: 'POST',
+      headers: { Origin: baseUrl, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: process.env.ADMIN_EMAIL })
+    });
+    assert.equal(requestReset.status, 200);
+    assert.match((await requestReset.json()).message, /If the address matches/);
+    assert.ok(resetUrl);
+
+    const token = new URL(resetUrl).searchParams.get('reset');
+    const reset = await fetch(`${baseUrl}/api/admin/reset-password`, {
+      method: 'POST',
+      headers: { Origin: baseUrl, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword: 'a-new-strong-test-password' })
+    });
+    assert.equal(reset.status, 200);
+
+    const replay = await fetch(`${baseUrl}/api/admin/reset-password`, {
+      method: 'POST',
+      headers: { Origin: baseUrl, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword: 'another-new-test-password' })
+    });
+    assert.equal(replay.status, 400);
+
+    const newLogin = await fetch(`${baseUrl}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: process.env.ADMIN_EMAIL, password: 'a-new-strong-test-password' })
+    });
+    assert.equal(newLogin.status, 200);
+    const oldLogin = await fetch(`${baseUrl}/api/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD })
+    });
+    assert.equal(oldLogin.status, 401);
+  } finally {
+    global.fetch = originalFetch;
+    await new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    if (originalEmail === undefined) delete process.env.ADMIN_EMAIL;
+    else process.env.ADMIN_EMAIL = originalEmail;
+    if (originalPassword === undefined) delete process.env.ADMIN_PASSWORD;
+    else process.env.ADMIN_PASSWORD = originalPassword;
+    if (originalApiKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.MAIL_FROM;
+    else process.env.MAIL_FROM = originalFrom;
+    if (originalBaseUrl === undefined) delete process.env.PUBLIC_BASE_URL;
+    else process.env.PUBLIC_BASE_URL = originalBaseUrl;
   }
 });
 

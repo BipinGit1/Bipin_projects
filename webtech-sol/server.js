@@ -3,15 +3,18 @@ require('dotenv').config();
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
-const { createHash, randomBytes, timingSafeEqual } = require('node:crypto');
+const { createHash, randomBytes, scrypt, timingSafeEqual } = require('node:crypto');
+const { promisify } = require('node:util');
 const { Pool } = require('pg');
 
+const scryptAsync = promisify(scrypt);
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_BODY_BYTES = 10 * 1024;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX = 5;
 const RATE_LIMITS = new Map();
 const LOGIN_RATE_LIMITS = new Map();
+const PASSWORD_RESET_RATE_LIMITS = new Map();
 const ADMIN_SESSIONS = new Map();
 const SESSION_COOKIE = process.env.NODE_ENV === 'production' ? '__Host-wts_admin' : 'wts_admin';
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
@@ -213,6 +216,21 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_credentials (
+      id SMALLINT PRIMARY KEY CHECK (id = 1),
+      password_hash CHAR(128) NOT NULL,
+      password_salt CHAR(32) NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_password_resets (
+      token_hash CHAR(64) PRIMARY KEY,
+      email VARCHAR(254) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL
+    )
+  `);
 }
 
 function readBoundedJson(request, response, callback) {
@@ -226,6 +244,119 @@ function readBoundedJson(request, response, callback) {
 }
 
 async function handleAdminApi(request, response, pathname, database = pool) {
+  if (pathname === '/api/admin/forgot-password') {
+    if (request.method !== 'POST') {
+      response.setHeader('Allow', 'POST');
+      return sendJson(response, 405, { error: 'Method not allowed.' });
+    }
+    if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
+      return sendJson(response, 415, { error: 'Invalid password reset request.' });
+    }
+    if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Request origin could not be verified.' });
+
+    const ip = getClientAddress(request);
+    if (isRateLimited(ip, Date.now(), PASSWORD_RESET_RATE_LIMITS, 3)) {
+      return sendJson(response, 429, { error: 'Too many reset requests. Try again in 15 minutes.' });
+    }
+
+    return readBoundedJson(request, response, async (input) => {
+      const email = typeof input?.email === 'string' ? input.email.trim().toLowerCase() : '';
+      const expectedEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+      if (!database || !expectedEmail) {
+        return sendJson(response, 503, { error: 'Password reset is not configured yet. Please contact the site administrator.' });
+      }
+      if (!safeEqual(email, expectedEmail)) {
+        return sendJson(response, 200, { message: 'If the address matches the dashboard account, a reset link will be emailed.' });
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const resetBaseUrl = process.env.PUBLIC_BASE_URL
+        || (process.env.NODE_ENV === 'production' ? 'https://webtech-sol.onrender.com' : 'http://localhost:3000');
+      const resetUrl = new URL('/admin', resetBaseUrl);
+      resetUrl.searchParams.set('reset', token);
+
+      try {
+        await database.query('DELETE FROM admin_password_resets WHERE email = $1 OR expires_at <= NOW()', [expectedEmail]);
+        await database.query(
+          'INSERT INTO admin_password_resets (token_hash, email, expires_at) VALUES ($1, $2, NOW() + interval \'30 minutes\')',
+          [tokenHash, expectedEmail]
+        );
+        await deliverPasswordResetEmail(expectedEmail, resetUrl.toString());
+        return sendJson(response, 200, { message: 'If the address matches the dashboard account, a reset link will be emailed.' });
+      } catch (error) {
+        try {
+          await database.query('DELETE FROM admin_password_resets WHERE token_hash = $1', [tokenHash]);
+        } catch (cleanupError) {
+          console.error('Password reset token cleanup failed:', cleanupError.message || cleanupError.name);
+        }
+        console.error('Password reset email could not be sent:', error.message || error.name);
+        return sendJson(response, 503, { error: 'The reset email could not be sent. Please try again later or contact the site administrator.' });
+      }
+    });
+  }
+
+  if (pathname === '/api/admin/reset-password') {
+    if (request.method !== 'POST') {
+      response.setHeader('Allow', 'POST');
+      return sendJson(response, 405, { error: 'Method not allowed.' });
+    }
+    if (!/^application\/json(?:\s*;|$)/i.test(request.headers['content-type'] || '')) {
+      return sendJson(response, 415, { error: 'Invalid password reset request.' });
+    }
+    if (!isSameOrigin(request)) return sendJson(response, 403, { error: 'Request origin could not be verified.' });
+
+    const ip = getClientAddress(request);
+    if (isRateLimited(ip, Date.now(), PASSWORD_RESET_RATE_LIMITS, 3)) {
+      return sendJson(response, 429, { error: 'Too many reset requests. Try again in 15 minutes.' });
+    }
+
+    return readBoundedJson(request, response, async (input) => {
+      const token = typeof input?.token === 'string' ? input.token : '';
+      const newPassword = typeof input?.newPassword === 'string' ? input.newPassword : '';
+      const expectedEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+      if (!database || !expectedEmail) {
+        return sendJson(response, 503, { error: 'Password reset is not configured yet. Please contact the site administrator.' });
+      }
+      if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) {
+        return sendJson(response, 400, { error: 'This reset link is invalid or has expired. Request a new one.' });
+      }
+      if (newPassword.length < 16 || newPassword.length > 256) {
+        return sendJson(response, 400, { error: 'Choose a password between 16 and 256 characters.' });
+      }
+
+      try {
+        const salt = randomBytes(16).toString('hex');
+        const passwordHash = await scryptAsync(newPassword, salt, 64).then((value) => value.toString('hex'));
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        const result = await database.query(`
+          WITH used_token AS (
+            DELETE FROM admin_password_resets
+            WHERE token_hash = $1 AND email = $4 AND expires_at > NOW()
+            RETURNING email
+          )
+          INSERT INTO admin_credentials (id, password_hash, password_salt)
+          SELECT 1, $2, $3 FROM used_token
+          ON CONFLICT (id) DO UPDATE
+            SET password_hash = EXCLUDED.password_hash,
+                password_salt = EXCLUDED.password_salt,
+                updated_at = NOW()
+          RETURNING id
+        `, [tokenHash, passwordHash, salt, expectedEmail]);
+
+        if (!result.rowCount) {
+          return sendJson(response, 400, { error: 'This reset link is invalid or has expired. Request a new one.' });
+        }
+        await database.query('DELETE FROM admin_password_resets WHERE email = $1', [expectedEmail]);
+        ADMIN_SESSIONS.clear();
+        return sendJson(response, 200, { message: 'Your password has been changed. Sign in with your new password.' });
+      } catch (error) {
+        console.error('Dashboard password could not be reset:', error.message || error.name);
+        return sendJson(response, 503, { error: 'The password could not be changed right now. Please try again.' });
+      }
+    });
+  }
+
   if (pathname === '/api/admin/login') {
     if (request.method !== 'POST') {
       response.setHeader('Allow', 'POST');
@@ -245,7 +376,7 @@ async function handleAdminApi(request, response, pathname, database = pool) {
       const password = typeof input?.password === 'string' ? input.password : '';
       const expectedEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
       const expectedPassword = process.env.ADMIN_PASSWORD;
-      if (!expectedEmail || !expectedPassword || expectedPassword.length < 16) {
+      if (!expectedEmail || ((!expectedPassword || expectedPassword.length < 16) && !database)) {
         return sendJson(response, 503, { error: 'Dashboard login is not configured yet.' });
       }
 
@@ -255,7 +386,21 @@ async function handleAdminApi(request, response, pathname, database = pool) {
         }
       }
       const emailMatches = safeEqual(email, expectedEmail);
-      const passwordMatches = safeEqual(password, expectedPassword);
+      let passwordMatches = false;
+      if (emailMatches && database) {
+        const storedPassword = await database.query(
+          'SELECT password_hash, password_salt FROM admin_credentials WHERE id = 1'
+        );
+        const credential = storedPassword.rows[0];
+        if (credential) {
+          const passwordHash = await scryptAsync(password, credential.password_salt, 64);
+          passwordMatches = safeEqual(passwordHash.toString('hex'), credential.password_hash.trim());
+        } else if (expectedPassword && expectedPassword.length >= 16) {
+          passwordMatches = safeEqual(password, expectedPassword);
+        }
+      } else if (expectedPassword && expectedPassword.length >= 16) {
+        passwordMatches = safeEqual(password, expectedPassword);
+      }
       if (!emailMatches || !passwordMatches) {
         return sendJson(response, 401, { error: 'Invalid email or password.' });
       }
@@ -418,6 +563,37 @@ async function deliverEmail(submission) {
     throw new RequestError(503, 'Email delivery is not configured yet. Please contact us by email.');
   }
 
+  async function deliverPasswordResetEmail(email, resetUrl) {
+    const { RESEND_API_KEY, MAIL_FROM } = process.env;
+    if (!RESEND_API_KEY || !MAIL_FROM) {
+      throw new Error('Resend and MAIL_FROM must be configured to send dashboard reset links.');
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: MAIL_FROM,
+        to: [email],
+        subject: 'Reset your WebTech Sol dashboard password',
+        text: [
+          'A request was made to reset your WebTech Sol dashboard password.',
+          '',
+          'Use this one-time link within 30 minutes to choose a new password:',
+          resetUrl,
+          '',
+          'If you did not request this, you can ignore this email.'
+        ].join('\n')
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!response.ok) throw new Error(`Resend API returned HTTP ${response.status}`);
+  }
+
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -438,6 +614,37 @@ async function deliverEmail(submission) {
         '',
         'Project details:',
         submission.message
+      ].join('\n')
+    }),
+    signal: AbortSignal.timeout(10000)
+  });
+
+  if (!response.ok) throw new Error(`Resend API returned HTTP ${response.status}`);
+}
+
+async function deliverPasswordResetEmail(email, resetUrl) {
+  const { RESEND_API_KEY, MAIL_FROM } = process.env;
+  if (!RESEND_API_KEY || !MAIL_FROM) {
+    throw new Error('Resend and MAIL_FROM must be configured to send dashboard reset links.');
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: MAIL_FROM,
+      to: [email],
+      subject: 'Reset your WebTech Sol dashboard password',
+      text: [
+        'A request was made to reset your WebTech Sol dashboard password.',
+        '',
+        'Use this one-time link within 30 minutes to choose a new password:',
+        resetUrl,
+        '',
+        'If you did not request this, you can ignore this email.'
       ].join('\n')
     }),
     signal: AbortSignal.timeout(10000)
@@ -512,6 +719,9 @@ function serveStatic(request, response, pathname) {
 
   response.writeHead(200, {
     'Content-Type': contentTypes[path.extname(filePath)],
+    ...(pathname === '/admin' || pathname === '/admin/' || pathname === '/admin.html'
+      ? { 'Cache-Control': 'no-store' }
+      : {}),
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin'

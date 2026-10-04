@@ -1,7 +1,10 @@
 const loginPanel = document.querySelector('#login-panel');
+const forgotPanel = document.querySelector('#forgot-panel');
+const resetPanel = document.querySelector('#reset-panel');
 const dashboardPanel = document.querySelector('#dashboard-panel');
 const loadingMessage = document.querySelector('#loading-message');
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+const resetToken = new URLSearchParams(window.location.search).get('reset') || '';
 
 function setMessage(target, message, isError = false) {
   target.textContent = message;
@@ -152,12 +155,26 @@ async function loadDashboard() {
 
 function showLogin(message = '') {
   dashboardPanel.hidden = true;
+  forgotPanel.hidden = true;
+  resetPanel.hidden = true;
   loginPanel.hidden = false;
   loadingMessage.hidden = true;
   if (message) setMessage(document.querySelector('#login-message'), message, true);
 }
 
+function showRecoveryPanel(panel) {
+  loginPanel.hidden = panel !== loginPanel;
+  forgotPanel.hidden = panel !== forgotPanel;
+  resetPanel.hidden = panel !== resetPanel;
+  dashboardPanel.hidden = true;
+  loadingMessage.hidden = true;
+}
+
 async function initialize() {
+  if (resetToken) {
+    showRecoveryPanel(resetPanel);
+    return;
+  }
   try {
     const session = await request('/api/admin/session');
     document.querySelector('#account-email').textContent = session.email;
@@ -170,6 +187,65 @@ async function initialize() {
     showLogin();
   }
 }
+
+document.querySelector('#forgot-password-button').addEventListener('click', () => {
+  const loginEmail = document.querySelector('#login-form [name="email"]').value;
+  const forgotEmail = document.querySelector('#forgot-form [name="email"]');
+  forgotEmail.value = loginEmail;
+  setMessage(document.querySelector('#forgot-message'), '');
+  showRecoveryPanel(forgotPanel);
+  forgotEmail.focus();
+});
+
+document.querySelector('#back-to-login-button').addEventListener('click', () => showRecoveryPanel(loginPanel));
+
+document.querySelector('#forgot-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const status = document.querySelector('#forgot-message');
+  button.disabled = true;
+  setMessage(status, '');
+  try {
+    const result = await request('/api/admin/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(Object.fromEntries(new FormData(form)))
+    });
+    setMessage(status, result.message);
+  } catch (error) {
+    setMessage(status, error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.querySelector('#reset-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const status = document.querySelector('#reset-message');
+  const data = Object.fromEntries(new FormData(form));
+  if (data.newPassword !== data.confirmPassword) {
+    setMessage(status, 'The passwords do not match.', true);
+    return;
+  }
+  button.disabled = true;
+  setMessage(status, '');
+  try {
+    const result = await request('/api/admin/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token: resetToken, newPassword: data.newPassword })
+    });
+    form.reset();
+    window.history.replaceState({}, document.title, '/admin');
+    setMessage(document.querySelector('#login-message'), result.message);
+    showRecoveryPanel(loginPanel);
+  } catch (error) {
+    setMessage(status, error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 document.querySelector('#login-form').addEventListener('submit', async (event) => {
   event.preventDefault();

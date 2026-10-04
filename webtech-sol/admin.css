@@ -66,6 +66,8 @@ input::placeholder { color: #778297; }
 .button-primary { color: white; background: linear-gradient(135deg, #7855f5, #9965fa); box-shadow: 0 10px 25px rgba(128, 95, 255, 0.19); }
 .button-quiet { color: #d9e2f2; border-color: var(--line); background: rgba(255, 255, 255, 0.025); }
 .back-link { display: inline-block; margin-top: 1.5rem; color: var(--muted); font-size: 0.88rem; text-decoration: none; }
+.text-button { justify-self: start; padding: 0; color: #b7a8ff; border: 0; background: none; cursor: pointer; font-size: 0.88rem; text-align: left; }
+.text-button:hover { color: var(--text); text-decoration: underline; }
 .message { min-height: 1.3rem; margin: 0; color: var(--green); font-size: 0.9rem; }
 .message.is-error { color: var(--red); }
 .loading-message { margin: 7rem auto; color: var(--muted); text-align: center; }
