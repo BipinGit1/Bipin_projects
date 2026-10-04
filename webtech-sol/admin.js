@@ -4,7 +4,9 @@ const resetPanel = document.querySelector('#reset-panel');
 const dashboardPanel = document.querySelector('#dashboard-panel');
 const loadingMessage = document.querySelector('#loading-message');
 const currency = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
-const resetToken = new URLSearchParams(window.location.search).get('reset') || '';
+const resetToken = new URLSearchParams(window.location.hash.slice(1)).get('reset')
+  || new URLSearchParams(window.location.search).get('reset')
+  || '';
 
 function setMessage(target, message, isError = false) {
   target.textContent = message;
@@ -199,6 +201,16 @@ document.querySelector('#forgot-password-button').addEventListener('click', () =
 
 document.querySelector('#back-to-login-button').addEventListener('click', () => showRecoveryPanel(loginPanel));
 
+document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const input = document.getElementById(button.dataset.passwordToggle);
+    const showPassword = input.type === 'password';
+    input.type = showPassword ? 'text' : 'password';
+    button.textContent = showPassword ? 'Hide' : 'Show';
+    button.setAttribute('aria-pressed', String(showPassword));
+  });
+});
+
 document.querySelector('#forgot-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -227,6 +239,11 @@ document.querySelector('#reset-form').addEventListener('submit', async (event) =
   const data = Object.fromEntries(new FormData(form));
   if (data.newPassword !== data.confirmPassword) {
     setMessage(status, 'The passwords do not match.', true);
+    return;
+  }
+  if (data.newPassword.length < 8 || data.newPassword.length > 256
+    || !/[A-Z]/.test(data.newPassword) || !/[a-z]/.test(data.newPassword)) {
+    setMessage(status, 'Use 8 to 256 characters, including at least one uppercase and one lowercase letter.', true);
     return;
   }
   button.disabled = true;

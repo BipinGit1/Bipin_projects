@@ -24,7 +24,7 @@ The contact form sends validated project requests through Resend to `MAIL_TO`. K
 3. Save changes and redeploy. The app creates its lead, revenue, admin credential, and reset-token tables at startup.
 4. Sign in at `https://webtech-sol.onrender.com/admin`. New website enquiries appear in the leads table; record payments manually to update the INR revenue totals and six-month chart.
 
-The admin session uses an HttpOnly, Secure, SameSite cookie and expires after eight hours. Login attempts are rate-limited. Use **Forgot password?** on the dashboard sign-in page to email a one-time reset link to the configured admin email. Reset links expire after 30 minutes and can only be used once; password reset emails require working Resend configuration. After the first reset, the new password is stored as a salted scrypt hash in PostgreSQL, replacing the environment password for login. Keep the Neon connection string and dashboard password private; never commit them to GitHub or enter them into this chat.
+The admin session uses an HttpOnly, Secure, SameSite cookie and expires after eight hours. Login attempts are rate-limited. Use **Forgot password?** on the dashboard sign-in page to email a one-time reset link to the configured admin email. Reset links expire after 30 minutes and can only be used once; requesting a newer link invalidates earlier links. Password reset emails require working Resend configuration. New passwords must contain at least 8 characters, including uppercase and lowercase letters. After the first reset, the new password is stored as a salted scrypt hash in PostgreSQL, replacing the environment password for login. Keep the Neon connection string and dashboard password private; never commit them to GitHub or enter them into this chat.
 
 Render blocks outbound SMTP, so this project uses Resend's HTTPS API for production email notifications. Without the database connection, project requests cannot be stored. If the database is configured but Resend is not, requests are still saved in the dashboard and the visitor is told that the email notification is temporarily unavailable.
 
@@ -34,7 +34,7 @@ Render blocks outbound SMTP, so this project uses Resend's HTTPS API for product
 - Per-IP request throttling and a hidden honeypot field
 - Resend API key kept outside source control
 - HttpOnly, Secure, SameSite admin session cookie with server-side expiry
-- Rate-limited password reset with single-use, expiring, hashed tokens
+- Rate-limited password reset with single-use, expiring, hashed tokens kept in the URL fragment
 - Salted scrypt password hashes stored in PostgreSQL after password reset
 - Same-origin validation for password recovery requests
 - Same-origin checks for authenticated dashboard mutations

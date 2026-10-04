@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createServer, deliverEmail, isValidRevenueEntry, validateSubmission } = require('../server');
+const { createServer, deliverEmail, isValidAdminPassword, isValidRevenueEntry, validateSubmission } = require('../server');
 
 const validSubmission = {
   name: 'Bipin Khatri',
@@ -93,6 +93,13 @@ test('validates positive INR revenue entries with real calendar dates', () => {
   assert.equal(isValidRevenueEntry({ title: '', amount: '1250', paidAt: '2026-10-04' }), false);
   assert.equal(isValidRevenueEntry({ title: 'Project payment', amount: '0', paidAt: '2026-10-04' }), false);
   assert.equal(isValidRevenueEntry({ title: 'Project payment', amount: '1250', paidAt: '2026-02-30' }), false);
+});
+
+test('requires reset passwords to contain 8 characters, uppercase, and lowercase', () => {
+  assert.equal(isValidAdminPassword('Abcdefg1'), true);
+  assert.equal(isValidAdminPassword('abcdefg1'), false);
+  assert.equal(isValidAdminPassword('ABCDEFG1'), false);
+  assert.equal(isValidAdminPassword('Abc123'), false);
 });
 
 test('saves contact requests to the lead store when email notifications are unavailable', async () => {
@@ -319,25 +326,33 @@ test('emails a single-use password reset link and changes the dashboard password
     assert.match((await requestReset.json()).message, /If the address matches/);
     assert.ok(resetUrl);
 
-    const token = new URL(resetUrl).searchParams.get('reset');
+    const token = new URLSearchParams(new URL(resetUrl).hash.slice(1)).get('reset');
+    assert.ok(token);
+    const invalidPassword = await fetch(`${baseUrl}/api/admin/reset-password`, {
+      method: 'POST',
+      headers: { Origin: baseUrl, 'Content-Type': 'application/json', 'X-Forwarded-For': '192.0.2.40' },
+      body: JSON.stringify({ token, newPassword: 'lowercase1' })
+    });
+    assert.equal(invalidPassword.status, 400);
+
     const reset = await fetch(`${baseUrl}/api/admin/reset-password`, {
       method: 'POST',
-      headers: { Origin: baseUrl, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword: 'a-new-strong-test-password' })
+      headers: { Origin: baseUrl, 'Content-Type': 'application/json', 'X-Forwarded-For': '192.0.2.41' },
+      body: JSON.stringify({ token, newPassword: 'NewStrongPass8' })
     });
     assert.equal(reset.status, 200);
 
     const replay = await fetch(`${baseUrl}/api/admin/reset-password`, {
       method: 'POST',
       headers: { Origin: baseUrl, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword: 'another-new-test-password' })
+      body: JSON.stringify({ token, newPassword: 'AnotherNewPass8' })
     });
     assert.equal(replay.status, 400);
 
     const newLogin = await fetch(`${baseUrl}/api/admin/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: process.env.ADMIN_EMAIL, password: 'a-new-strong-test-password' })
+      body: JSON.stringify({ email: process.env.ADMIN_EMAIL, password: 'NewStrongPass8' })
     });
     assert.equal(newLogin.status, 200);
     const oldLogin = await fetch(`${baseUrl}/api/admin/login`, {

@@ -33,7 +33,10 @@
           </label>
           <label>
             <span>Password</span>
-            <input name="password" type="password" autocomplete="current-password" required maxlength="256" />
+            <div class="password-control">
+              <input id="login-password" name="password" type="password" autocomplete="current-password" required maxlength="256" />
+              <button class="password-toggle" type="button" data-password-toggle="login-password" aria-pressed="false">Show</button>
+            </div>
           </label>
           <p id="login-message" class="message" role="status" aria-live="polite"></p>
           <button class="button button-primary" type="submit">Sign in to dashboard</button>
@@ -68,15 +71,21 @@
         </a>
         <p class="eyebrow">Account recovery</p>
         <h1>Choose a new password.</h1>
-        <p class="muted">Use at least 16 characters. This reset link can only be used once and expires after 30 minutes.</p>
+        <p class="muted">Use 8–256 characters with at least one uppercase and one lowercase letter. Reset links work once for 30 minutes; requesting a new link invalidates earlier ones.</p>
         <form id="reset-form">
           <label>
             <span>New password</span>
-            <input name="newPassword" type="password" autocomplete="new-password" required minlength="16" maxlength="256" />
+            <div class="password-control">
+              <input id="new-password" name="newPassword" type="password" autocomplete="new-password" required minlength="8" maxlength="256" pattern="(?=.*[a-z])(?=.*[A-Z]).{8,256}" title="Use 8–256 characters with at least one uppercase and one lowercase letter." />
+              <button class="password-toggle" type="button" data-password-toggle="new-password" aria-pressed="false">Show</button>
+            </div>
           </label>
           <label>
             <span>Confirm new password</span>
-            <input name="confirmPassword" type="password" autocomplete="new-password" required minlength="16" maxlength="256" />
+            <div class="password-control">
+              <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required minlength="8" maxlength="256" pattern="(?=.*[a-z])(?=.*[A-Z]).{8,256}" title="Use 8–256 characters with at least one uppercase and one lowercase letter." />
+              <button class="password-toggle" type="button" data-password-toggle="confirm-password" aria-pressed="false">Show</button>
+            </div>
           </label>
           <p id="reset-message" class="message" role="status" aria-live="polite"></p>
           <button class="button button-primary" type="submit">Change password</button>

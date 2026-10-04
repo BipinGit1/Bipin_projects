@@ -60,6 +60,10 @@ input {
 }
 input:focus { outline: 2px solid rgba(128, 95, 255, 0.65); border-color: transparent; }
 input::placeholder { color: #778297; }
+.password-control { position: relative; }
+.password-control input { padding-right: 4.25rem; }
+.password-toggle { position: absolute; top: 50%; right: 0.55rem; transform: translateY(-50%); padding: 0.35rem 0.45rem; color: #b7a8ff; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font-size: 0.78rem; font-weight: 700; }
+.password-toggle:hover { color: var(--text); }
 .button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0.68rem 1rem; border: 1px solid transparent; border-radius: 11px; cursor: pointer; font-weight: 700; transition: transform 0.18s ease, opacity 0.18s ease; }
 .button:hover { transform: translateY(-1px); }
 .button:disabled { cursor: wait; opacity: 0.6; }

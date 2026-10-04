@@ -274,7 +274,7 @@ async function handleAdminApi(request, response, pathname, database = pool) {
       const resetBaseUrl = process.env.PUBLIC_BASE_URL
         || (process.env.NODE_ENV === 'production' ? 'https://webtech-sol.onrender.com' : 'http://localhost:3000');
       const resetUrl = new URL('/admin', resetBaseUrl);
-      resetUrl.searchParams.set('reset', token);
+      resetUrl.hash = new URLSearchParams({ reset: token }).toString();
 
       try {
         await database.query('DELETE FROM admin_password_resets WHERE email = $1 OR expires_at <= NOW()', [expectedEmail]);
@@ -321,8 +321,8 @@ async function handleAdminApi(request, response, pathname, database = pool) {
       if (!/^[A-Za-z0-9_-]{40,50}$/.test(token)) {
         return sendJson(response, 400, { error: 'This reset link is invalid or has expired. Request a new one.' });
       }
-      if (newPassword.length < 16 || newPassword.length > 256) {
-        return sendJson(response, 400, { error: 'Choose a password between 16 and 256 characters.' });
+      if (!isValidAdminPassword(newPassword)) {
+        return sendJson(response, 400, { error: 'Use 8 to 256 characters, including at least one uppercase and one lowercase letter.' });
       }
 
       try {
@@ -557,41 +557,18 @@ async function readJsonBody(request) {
   }
 }
 
+function isValidAdminPassword(password) {
+  return typeof password === 'string'
+    && password.length >= 8
+    && password.length <= 256
+    && /[A-Z]/.test(password)
+    && /[a-z]/.test(password);
+}
+
 async function deliverEmail(submission) {
   const { RESEND_API_KEY, MAIL_FROM } = process.env;
   if (!RESEND_API_KEY || !MAIL_FROM) {
     throw new RequestError(503, 'Email delivery is not configured yet. Please contact us by email.');
-  }
-
-  async function deliverPasswordResetEmail(email, resetUrl) {
-    const { RESEND_API_KEY, MAIL_FROM } = process.env;
-    if (!RESEND_API_KEY || !MAIL_FROM) {
-      throw new Error('Resend and MAIL_FROM must be configured to send dashboard reset links.');
-    }
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: MAIL_FROM,
-        to: [email],
-        subject: 'Reset your WebTech Sol dashboard password',
-        text: [
-          'A request was made to reset your WebTech Sol dashboard password.',
-          '',
-          'Use this one-time link within 30 minutes to choose a new password:',
-          resetUrl,
-          '',
-          'If you did not request this, you can ignore this email.'
-        ].join('\n')
-      }),
-      signal: AbortSignal.timeout(10000)
-    });
-
-    if (!response.ok) throw new Error(`Resend API returned HTTP ${response.status}`);
   }
 
   const response = await fetch('https://api.resend.com/emails', {
@@ -777,4 +754,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { createServer, deliverEmail, isValidRevenueEntry, validateSubmission };
+module.exports = { createServer, deliverEmail, isValidAdminPassword, isValidRevenueEntry, validateSubmission };
