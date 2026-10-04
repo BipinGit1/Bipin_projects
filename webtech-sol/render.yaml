@@ -13,7 +13,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: ADMIN_EMAIL
-        value: bipinkhatri7302@gmail.com
+        value: webtechsolutionsz077@gmail.com
       - key: PUBLIC_BASE_URL
         value: https://webtech-sol.onrender.com
       - key: ADMIN_PASSWORD

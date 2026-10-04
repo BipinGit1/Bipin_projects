@@ -20,7 +20,7 @@ The contact form sends validated project requests through Resend to `MAIL_TO`. K
 ## Private business dashboard
 
 1. Create a free PostgreSQL project in Neon and copy its pooled connection string (with TLS enabled).
-2. In Render, add `DATABASE_URL`, `ADMIN_EMAIL=bipinkhatri7302@gmail.com`, a unique strong `ADMIN_PASSWORD`, `RESEND_API_KEY`, and `MAIL_FROM=onboarding@resend.dev` in the web service's Environment settings. The Resend test sender can only send to the email address associated with the Resend account; configure a custom verified domain for production sending to other addresses. Set `PUBLIC_BASE_URL` to the public HTTPS site URL.
+2. In Render, add `DATABASE_URL`, `ADMIN_EMAIL=webtechsolutionsz077@gmail.com`, a unique strong `ADMIN_PASSWORD`, `RESEND_API_KEY`, and `MAIL_FROM` in the web service's Environment settings. Sending to this Gmail address with Resend requires a custom domain you control and have verified with Resend; the `onboarding@resend.dev` test sender can only deliver to the Resend account email. Set `PUBLIC_BASE_URL` to the public HTTPS site URL.
 3. Save changes and redeploy. The app creates its lead, revenue, admin credential, and reset-token tables at startup.
 4. Sign in at `https://webtech-sol.onrender.com/admin`. New website enquiries appear in the leads table; record payments manually to update the INR revenue totals and six-month chart.
 
